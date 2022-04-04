@@ -1,4 +1,4 @@
-function result = perform_IIS(data,M,nmin,ns,p,epsilon,max_iter,Vflag,verbose)
+function result = perform_IIS(data,iispar,Vflag,verbose)
 
 % This function is a wrapper around iterative_input_selection.m,   
 % the function implementing the IIS technique using Extra-Trees.                                                         
@@ -33,7 +33,7 @@ function result = perform_IIS(data,M,nmin,ns,p,epsilon,max_iter,Vflag,verbose)
 % 0) check if p <= number of attributes
 natt = size(data,2)-1;
 
-if p > natt
+if iispar.p > natt
     error(['The number of SISO models evaluated',...
         'has to be < number of candidate inputs'])
 end
@@ -45,14 +45,14 @@ data_sh = shuffle_data(data);
 
 % Run the IIS algorithm
 if verbose == 0
-    evalc('result = iterative_input_selection(data_sh,M,nmin,ns,p,epsilon,max_iter,Vflag)');
+    evalc('result = iterative_input_selection(data_sh,iispar,Vflag,[])');
 else
-    result = iterative_input_selection(data_sh,M,nmin,ns,p,epsilon,max_iter,Vflag);
+    result = iterative_input_selection(data_sh,iispar,Vflag,[]);
 end
 
 
 % This code has been written by Riccardo Taormina.
-
+% Updated by Dennis Zanutto 04/04/22
 
 
         

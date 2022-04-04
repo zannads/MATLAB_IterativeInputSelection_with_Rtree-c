@@ -54,29 +54,43 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
     % 0) SET THE PARAMETERS
     M       = iispar.M;
     nmin    = iispar.nmin;
-    k       = iispar.k;
+    if isempty( iispar.k )
+        k   = size(subset,2)-1;
+    else
+        k   = iispar.k;
+    end
     
     ns      = iispar.ns;
     p       = iispar.p;
     epsilon = iispar.epsilon;
     max_iter= iispar.max_iter;
     
-    fxV = fxV(:);
+    if nargin < 3
+        f = 1;
+        fxV = [];
+    else
+        f = Vflag;
+        if nargin < 4
+            fxV = [];
+        else % nargin 4
+            fxV = fxV(:);
+        end
+    end
+    
     q       = length( fxV );
     max_iter = max_iter + q;
-    
-    f = Vflag;
     
     % Initialize the counter and the exit condition flag
     iter     = 1;    % iterations counter
     diff     = 1;    % exit flag
     
     % Re-define the subset matrix
-    l = floor(length(subset)/ns);
+    l = floor(size(subset,1)/ns);
     subset = subset(1:l*ns,:);
     
     % Define the MISO model output
     miso_output = subset(:,end);
+    miso_model  = [];
     
     % Define the set of candidate input variables
     input  = subset(:,1:end-1);
@@ -90,6 +104,7 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
         
         % Visualize the iteration
         disp('ITERATION:'); disp(iter);
+        iterS = ['iter_', num2str(iter)];
         
         % Define the output variable to be used during the ranking
         if iter == 1
@@ -106,7 +121,7 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
             list = 1:size(input,2);
             [X, I] = sort( list'==features, 1, 'descend' );
             ranking = [X,I];
-            eval(['result.iter_' num2str(iter) '.ranking' '=' 'ranking;']);
+            result.(iterS).ranking = ranking;
             disp(ranking);
             
             %evaluate the siso model, for consistency
@@ -117,13 +132,13 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
             end
             performance = siso_model.cross_validation.performance.Rt2_val_pred_mean;
             
-            eval(['result.iter_' num2str(iter) '.SISO' '=' '[features performance];']);
+            result.(iterS).SISO = [features performance];
             disp([features performance]);
             
             % Choose the SISO model with the best performance
             val = performance;
             best_siso_input = features;
-            eval(['result.iter_' num2str(iter) '.best_SISO' '=' '[best_siso_input val];']);
+            result.(iterS).best_SISO = [best_siso_input val];
             disp('Select variable:'); disp(best_siso_input);
             
         else
@@ -132,9 +147,8 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
             
             % Run the feature ranking
             disp('Ranking:');
-            k = size(input,2);
             [ranking] = input_ranking(matrix_ranking,M,k,nmin);
-            eval(['result.iter_' num2str(iter) '.ranking' '=' 'ranking;']);
+            result.(iterS).ranking = ranking;
             disp(ranking);
             
             % Select and cross-validate p SISO models (the first p-ranked models)
@@ -149,34 +163,35 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
                 end
                 performance(i) = siso_model.cross_validation.performance.Rt2_val_pred_mean;
             end
-            eval(['result.iter_' num2str(iter) '.SISO' '=' '[features performance];']);
+            result.(iterS).SISO = [features performance];
             disp([features performance]);
             
             % Choose the SISO model with the best performance
             [val,idx_siso] = max(performance);
             best_siso_input = features(idx_siso);
-            eval(['result.iter_' num2str(iter) '.best_SISO' '=' '[best_siso_input val];']);
+            result.(iterS).best_SISO = [best_siso_input val];
             disp('Select variable:'); disp(best_siso_input);
         end
         
         % Check the exit condition
-        if (all(miso_input - best_siso_input) == 0)
+        if any( miso_input == best_siso_input )
             result.exit_condition = 'An input variable was selected twice';
             result.iters_done = iter;
             return
         end
         
         % Build a MISO model with the selected inputs
+        % Save old for performance comparison
+        miso_model_old = miso_model;
         disp('Evaluating MISO model:');
-        miso_input = [miso_input best_siso_input];
+        miso_input = [miso_input best_siso_input]; %#ok<AGROW>
         k = length(miso_input);
         if f==1
             [miso_model] = crossvalidation_extra_tree_ensemble([subset(:,miso_input) miso_output],M,k,nmin,ns,1);
         else
             [miso_model] = repeatedRandomSubSamplingValidation_extra_tree_ensemble([subset(:,miso_input) miso_output],M,k,nmin,ns,1);
         end
-        eval(['miso_model_' num2str(iter) '= miso_model;']);
-        eval(['result.iter_' num2str(iter) '.MISO' '=' 'miso_model;']);
+        result.(iterS).MISO = miso_model;
         disp(miso_model.cross_validation.performance.Rt2_val_pred_mean);
         
         % Evaluate the performance of the MISO model and calculate the
@@ -184,7 +199,7 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
         if iter == 1   % at the first iteration, use a default value
             diff = 1;
         else
-            diff = miso_model.cross_validation.performance.Rt2_val_pred_mean - eval(['miso_model_' num2str(iter-1) '.cross_validation.performance.Rt2_val_pred_mean']);
+            diff = miso_model.cross_validation.performance.Rt2_val_pred_mean - miso_model_old.cross_validation.performance.Rt2_val_pred_mean;
         end
         
         % Compute the MISO model residual
@@ -205,20 +220,6 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
         
     end
     
-    
-    % This code has been written by Stefano Galelli, Matteo Giuliani
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+end
+% This code has been written by Stefano Galelli, Matteo Giuliani
+% Updated by Dennis Zanutto 04/04/22
