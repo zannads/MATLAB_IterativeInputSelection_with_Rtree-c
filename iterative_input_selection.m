@@ -1,5 +1,5 @@
 
-function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
+function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
     
     % This function implements the IIS algorithm
     %
@@ -15,12 +15,12 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
     % Vflag     = selection of the type of validation,
     %               1 = k-fold(default)
     %               2= repeated random sub-sampling
-    % fxV      = column index of the subset containg the variable from which
-    %           you have to start. First q iterations, first q elements of the
-    %           miso model.
+    % fxV      = column index of the subset containg the Variable from which
+    %           you have to start. First q iterations the variable is FiXed,
+    %           first q elements of the miso model.
     %
-    % Output
-    % result   = structure containing the result for each iteration
+    %
+    % Output result   = structure containing the result for each iteration
     %
     %
     % Copyright 2014 Stefano Galelli and Matteo Giuliani
@@ -65,20 +65,21 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
     epsilon = iispar.epsilon;
     max_iter= iispar.max_iter;
     
-    if nargin < 3
-        f = 1;
-        fxV = [];
-    else
-        f = Vflag;
-        if nargin < 4
-            fxV = [];
-        else % nargin 4
-            fxV = fxV(:);
-        end
-    end
+    iP = inputParser;
     
+    addOptional(iP,'Vflag', 1, @(x) isnumeric(x) && isscalar(x) ); 
+    addOptional(iP,'fxV',[], @(x) isnumeric(x) && isvector(x) && length(x)<= max_iter );
+    
+    addParameter(iP, 'Name', string(1:size(subset,2)-1), @(x) (isstring(x) || iscellstr(x)) && length(x) == size(subset,2)-1 );
+    
+    parse( iP, Vflag, fxV, varargin{:} );
+    
+    f           = iP.Results.Vflag;
+    fxV         = iP.Results.fxV;
+    listNames   = string(iP.Results.Name);
+    
+    % number of forced variable selected
     q       = length( fxV );
-    max_iter = max_iter + q;
     
     % Initialize the counter and the exit condition flag
     iter     = 1;    % iterations counter
@@ -122,7 +123,7 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
             [X, I] = sort( list'==features, 1, 'descend' );
             ranking = [X,I];
             result.(iterS).ranking = ranking;
-            disp(ranking);
+            %disp(ranking);
             
             %evaluate the siso model, for consistency
             if f == 1
@@ -132,45 +133,49 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
             end
             performance = siso_model.cross_validation.performance.Rt2_val_pred_mean;
             
-            result.(iterS).SISO = [features performance];
-            disp([features performance]);
+            result.(iterS).SISO = [features, performance];
+            disp('Tested SISO:');
+            disp([features,  performance, listNames(features)]);
             
             % Choose the SISO model with the best performance
             val = performance;
             best_siso_input = features;
             result.(iterS).best_SISO = [best_siso_input val];
-            disp('Select variable:'); disp(best_siso_input);
+            disp('Select variable:'); disp([best_siso_input, listNames(best_siso_input)]);
             
         else
             % Define the ranking matrix
             matrix_ranking = [input rank_output];
             
             % Run the feature ranking
-            disp('Ranking:');
+            %disp('Ranking:');
             [ranking] = input_ranking(matrix_ranking,M,k,nmin);
             result.(iterS).ranking = ranking;
-            disp(ranking);
+            %disp(ranking);
             
             % Select and cross-validate p SISO models (the first p-ranked models)
             disp('Evaluating SISO models:');
             features = ranking(1:p,2);                             % p features to be considered
             performance = zeros(p,1);	                           % initialize a vector for the performance of the p SISO models%
             for i = 1:p
+                lineLenght = fprintf('%d/%d\n', i, p);
                 if f == 1
                     [siso_model] = crossvalidation_extra_tree_ensemble([subset(:,features(i)) rank_output],M,1,nmin,ns,0);
                 else
                     [siso_model] = repeatedRandomSubSamplingValidation_extra_tree_ensemble([subset(:,features(i)) rank_output],M,1,nmin,ns,0);
                 end
-                performance(i) = siso_model.cross_validation.performance.Rt2_val_pred_mean;
+                performance(i) = siso_model.cross_validation.performance.Rt2_val_pred_mean; 
+                fprintf(repmat('\b', 1,lineLenght));
             end
-            result.(iterS).SISO = [features performance];
-            disp([features performance]);
+            result.(iterS).SISO = [features, performance];
+            disp('Tested SISO:');
+            disp([features,  performance, listNames(features)]);
             
             % Choose the SISO model with the best performance
             [val,idx_siso] = max(performance);
             best_siso_input = features(idx_siso);
             result.(iterS).best_SISO = [best_siso_input val];
-            disp('Select variable:'); disp(best_siso_input);
+            disp('Select variable:'); disp([best_siso_input, listNames(best_siso_input)]);
         end
         
         % Check the exit condition
@@ -222,4 +227,4 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV)
     
 end
 % This code has been written by Stefano Galelli, Matteo Giuliani
-% Updated by Dennis Zanutto 04/04/22
+% Updated by Dennis Zanutto
