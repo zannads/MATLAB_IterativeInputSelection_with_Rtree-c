@@ -89,7 +89,7 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
     q       = length( fxV );
     
     % Initialize the counter and the exit condition flag
-    iter     = 1;    % iterations counter
+    iterC     = 1;    % iterations counter
     diff     = 1;    % exit flag
     
     % Re-define the subset matrix
@@ -108,30 +108,27 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
     
     
     % 1) IIS ALGORITHM
-    while (diff > epsilon) && (iter <= max_iter)
+    while (diff > epsilon) && (iterC <= max_iter)
         
         % Visualize the iteration
-        fprintf('ITERATION:\n\t%d\n', iter);
-        %for new dynamic way that matlab can access the struct fields without the need of the function eval
-        % better code readibility and debug
-        iterS = ['iter_', int2str(iter)];   
+        fprintf('ITERATION:\n\t%d\n', iterC);
         
         % Define the output variable to be used during the ranking
-        if iter == 1
+        if iterC == 1
             rank_output = miso_output; % at the first iteration the MISO model output and ranking output are the same variable%
         else
             rank_output = residual;    % at the other iterations, the ranking output is the residual of the previous MISO model%
         end
         
-        if iter <= q
+        if iterC <= q
             % the first q element are not set according to the input ranking algorithm,
             % but from the user
             % ranking is fixed from the user, the selected feature is
-            features = fxV(iter);
+            features = fxV(iterC);
             list = 1:size(input,2);
             [X, I] = sort( list'==features, 1, 'descend' );
             ranking = [X,I];
-            result.(iterS).ranking = ranking;
+            result.iter(iterC).ranking = ranking;
             fprintf('Evaluating SISO model:\n\t%s\n', listNames(features));
             %evaluate the siso model, for consistency
             if f == 1
@@ -141,7 +138,7 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
             end
             performance = siso_model.cross_validation.performance.Rt2_val_pred_mean;
             
-            result.(iterS).SISO = [features, performance];
+            result.iter(iterC).SISO = [features, performance];
            
             % Choose the SISO model with the best performance
             val = performance;
@@ -154,7 +151,7 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
             % Run the feature ranking
             k = size( input,2 );
             [ranking] = input_ranking(matrix_ranking,M,k,nmin);
-            result.(iterS).ranking = ranking;
+            result.iter(iterC).ranking = ranking;
             
             % Select and cross-validate p SISO models (the first p-ranked models)
             features = ranking(1:p,2);                             % p features to be considered
@@ -175,7 +172,7 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
                 % to avoid using multiple lines
                 fprintf(repmat('\b', 1,lineLenght));
             end
-            result.(iterS).SISO = [features, performance];
+            result.iter(iterC).SISO = [features, performance];
             
             % Choose the SISO model with the best performance
             [val,idx_siso] = max(performance);
@@ -183,14 +180,14 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
             
         end
         
-        result.(iterS).best_SISO = [best_siso_input val];
+        result.iter(iterC).best_SISO = [best_siso_input val];
         fprintf('Selected variable:\n\t%d %4.2f %s\n\n', best_siso_input, val, listNames(best_siso_input) );
         
         % Check the exit condition
         if any( miso_input == best_siso_input )
             result.exit_condition = 'An input variable was selected twice';
-            result.iters_done = iter;
-            result.iters_valid = iter-1;
+            result.iters_done = iterC;
+            result.iters_valid = iterC-1;
             return
         end
         
@@ -205,12 +202,12 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
         else
             [miso_model] = repeatedRandomSubSamplingValidation_extra_tree_ensemble([input(:,miso_input) miso_output],M,k,nmin,ns,1);
         end
-        result.(iterS).MISO = miso_model;
+        result.iter(iterC).MISO = miso_model;
         fprintf('\t%4.2f\n\n', miso_model.cross_validation.performance.Rt2_val_pred_mean);
         
         % Evaluate the performance of the MISO model and calculate the
         % difference with respect to the previous MISO model
-        if iter == 1   % at the first iteration, use a default value
+        if iterC == 1   % at the first iteration, use a default value
             diff = 1;
         else
             diff = miso_model.cross_validation.performance.Rt2_val_pred_mean - miso_model_old.cross_validation.performance.Rt2_val_pred_mean;
@@ -221,19 +218,19 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
         
         
         % Check the exit condition
-        if iter == max_iter
+        if iterC == max_iter
             result.exit_condition = 'The maximum number of iterations was reached';
-            result.iters_done = iter; 
-            result.iters_valid = iter;
+            result.iters_done = iterC; 
+            result.iters_valid = iterC;
         end
         if diff <= epsilon
             result.exit_condition = 'The tolerance epsilon was reached';
-            result.iters_done = iter;
-            result.iters_valid = iter-1;
+            result.iters_done = iterC;
+            result.iters_valid = iterC-1;
         end
         
         % Update the counter at the end! 
-        iter = iter + 1;
+        iterC = iterC + 1;
         
     end
     
