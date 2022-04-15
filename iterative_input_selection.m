@@ -5,19 +5,20 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
     %
     % subset   = observations
     % iispar   = struct containing the following parameters:
-    % M        = number of trees in the ensemble
-    % nmin     = minimum number of points per leaf
-    % ns       = number of folds in the k-fold cross-validation process
-    % p        = number of SISO models (it must be smaller than the number of
-    %            candidate inputs).
-    % epsilon  = tolerance
-    % max_iter = maximum number of iterations
-    % Vflag     = selection of the type of validation,
+    %   M        = number of trees in the ensemble
+    %   nmin     = minimum number of points per leaf
+    %   ns       = number of folds in the k-fold cross-validation process
+    %   p        = number of SISO models (it must be smaller than the number of
+    %              candidate inputs).
+    %   epsilon  = tolerance
+    %   max_iter = maximum number of iterations
+    % Vflag     = selection of the type of validation:
     %               1 = k-fold(default)
     %               2= repeated random sub-sampling
     % fxV      = column index of the subset containg the Variable from which
-    %           you have to start. First q iterations the variable is FiXed,
-    %           first q elements of the miso model.
+    %           you have to start the iterative procedure. During the first q
+    %           iterations the variable is FiXed, first q elements of the miso
+    %           model.
     %
     %
     % Output result   = structure containing the result for each iteration
@@ -67,9 +68,15 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
     
     iP = inputParser;
     
-    addOptional(iP,'Vflag', 1, @(x) isnumeric(x) && isscalar(x) ); 
-    addOptional(iP,'fxV',[], @(x) isnumeric(x) && isvector(x) && length(x)<= max_iter );
+    %This two variables are optional, so it works even if you don't insert
+    %them, on the other hand the order is fixed, so 3rd element is alwasy Vflag
+    %           'variable', 'default', 'check function'
+    addOptional(iP,'Vflag',  1,     @(x) isnumeric(x) && isscalar(x) ); 
+    addOptional(iP,'fxV',   [],     @(x) isnumeric(x) && isvector(x) && length(x)<= max_iter );
     
+    % this is a couple Name Value for the function, use if during the procedure
+    % you are intereseted in seeing the name of the variable rather than the
+    % number representing it.
     addParameter(iP, 'Name', string(1:size(subset,2)-1), @(x) (isstring(x) || iscellstr(x)) && length(x) == size(subset,2)-1 );
     
     parse( iP, Vflag, fxV, varargin{:} );
@@ -87,14 +94,14 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
     
     % Re-define the subset matrix
     l = floor(size(subset,1)/ns);
-    subset = subset(1:l*ns,:);
+    sel_row = 1:l*ns;
     
     % Define the MISO model output
-    miso_output = subset(:,end);
+    miso_output = subset(sel_row,end);
     miso_model  = [];
     
     % Define the set of candidate input variables
-    input  = subset(:,1:end-1);
+    input  = subset(sel_row,1:end-1);
     
     % Other variables to be initialized
     miso_input = [];  % initialize an empty set to store the input variables to be selected%
@@ -104,8 +111,10 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
     while (diff > epsilon) && (iter <= max_iter)
         
         % Visualize the iteration
-        disp('ITERATION:'); disp(iter);
-        iterS = ['iter_', num2str(iter)];
+        fprintf('ITERATION:\n\t%d\n', iter);
+        %for new dynamic way that matlab can access the struct fields without the need of the function eval
+        % better code readibility and debug
+        iterS = ['iter_', int2str(iter)];   
         
         % Define the output variable to be used during the ranking
         if iter == 1
@@ -123,81 +132,81 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
             [X, I] = sort( list'==features, 1, 'descend' );
             ranking = [X,I];
             result.(iterS).ranking = ranking;
-            %disp(ranking);
-            
+            fprintf('Evaluating SISO model:\n\t%s\n', listNames(features));
             %evaluate the siso model, for consistency
             if f == 1
-                [siso_model] = crossvalidation_extra_tree_ensemble([subset(:,features) rank_output],M,1,nmin,ns,0);
+                [siso_model] = crossvalidation_extra_tree_ensemble([input(:,features) rank_output],M,1,nmin,ns,0);
             else
-                [siso_model] = repeatedRandomSubSamplingValidation_extra_tree_ensemble([subset(:,features) rank_output],M,1,nmin,ns,0);
+                [siso_model] = repeatedRandomSubSamplingValidation_extra_tree_ensemble([input(:,features) rank_output],M,1,nmin,ns,0);
             end
             performance = siso_model.cross_validation.performance.Rt2_val_pred_mean;
             
             result.(iterS).SISO = [features, performance];
-            disp('Tested SISO:');
-            disp([features,  performance, listNames(features)]);
-            
+           
             % Choose the SISO model with the best performance
             val = performance;
             best_siso_input = features;
-            result.(iterS).best_SISO = [best_siso_input val];
-            disp('Select variable:'); disp([best_siso_input, listNames(best_siso_input)]);
             
         else
             % Define the ranking matrix
             matrix_ranking = [input rank_output];
             
             % Run the feature ranking
-            %disp('Ranking:');
+            k = size( input,2 );
             [ranking] = input_ranking(matrix_ranking,M,k,nmin);
             result.(iterS).ranking = ranking;
-            %disp(ranking);
             
             % Select and cross-validate p SISO models (the first p-ranked models)
-            disp('Evaluating SISO models:');
             features = ranking(1:p,2);                             % p features to be considered
             performance = zeros(p,1);	                           % initialize a vector for the performance of the p SISO models%
+            fprintf('Evaluating SISO models:\n');
+            fprintf('\t%s\n', listNames(features) );
             for i = 1:p
+                % to print at runtime the number of the model(this for cicle is the one
+                % that takes the most time without any info)
                 lineLenght = fprintf('%d/%d\n', i, p);
                 if f == 1
-                    [siso_model] = crossvalidation_extra_tree_ensemble([subset(:,features(i)) rank_output],M,1,nmin,ns,0);
+                    [siso_model] = crossvalidation_extra_tree_ensemble([input(:,features(i)) rank_output],M,1,nmin,ns,0);
                 else
-                    [siso_model] = repeatedRandomSubSamplingValidation_extra_tree_ensemble([subset(:,features(i)) rank_output],M,1,nmin,ns,0);
+                    [siso_model] = repeatedRandomSubSamplingValidation_extra_tree_ensemble([input(:,features(i)) rank_output],M,1,nmin,ns,0);
                 end
-                performance(i) = siso_model.cross_validation.performance.Rt2_val_pred_mean; 
+                performance(i) = siso_model.cross_validation.performance.Rt2_val_pred_mean;
+                
+                % to avoid using multiple lines
                 fprintf(repmat('\b', 1,lineLenght));
             end
             result.(iterS).SISO = [features, performance];
-            disp('Tested SISO:');
-            disp([features,  performance, listNames(features)]);
             
             % Choose the SISO model with the best performance
             [val,idx_siso] = max(performance);
             best_siso_input = features(idx_siso);
-            result.(iterS).best_SISO = [best_siso_input val];
-            disp('Select variable:'); disp([best_siso_input, listNames(best_siso_input)]);
+            
         end
+        
+        result.(iterS).best_SISO = [best_siso_input val];
+        fprintf('Selected variable:\n\t%d %4.2f %s\n\n', best_siso_input, val, listNames(best_siso_input) );
         
         % Check the exit condition
         if any( miso_input == best_siso_input )
             result.exit_condition = 'An input variable was selected twice';
             result.iters_done = iter;
+            result.iters_valid = iter-1;
             return
         end
         
         % Build a MISO model with the selected inputs
         % Save old for performance comparison
         miso_model_old = miso_model;
-        disp('Evaluating MISO model:');
+        fprintf('Evaluating MISO model:\n');
         miso_input = [miso_input best_siso_input]; %#ok<AGROW>
         k = length(miso_input);
         if f==1
-            [miso_model] = crossvalidation_extra_tree_ensemble([subset(:,miso_input) miso_output],M,k,nmin,ns,1);
+            [miso_model] = crossvalidation_extra_tree_ensemble([input(:,miso_input) miso_output],M,k,nmin,ns,1);
         else
-            [miso_model] = repeatedRandomSubSamplingValidation_extra_tree_ensemble([subset(:,miso_input) miso_output],M,k,nmin,ns,1);
+            [miso_model] = repeatedRandomSubSamplingValidation_extra_tree_ensemble([input(:,miso_input) miso_output],M,k,nmin,ns,1);
         end
         result.(iterS).MISO = miso_model;
-        disp(miso_model.cross_validation.performance.Rt2_val_pred_mean);
+        fprintf('\t%4.2f\n\n', miso_model.cross_validation.performance.Rt2_val_pred_mean);
         
         % Evaluate the performance of the MISO model and calculate the
         % difference with respect to the previous MISO model
@@ -210,18 +219,21 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
         % Compute the MISO model residual
         residual = miso_output - miso_model.complete_model.trajectories;
         
-        % Update the counter
-        iter = iter + 1;
         
         % Check the exit condition
-        if iter > max_iter
+        if iter == max_iter
             result.exit_condition = 'The maximum number of iterations was reached';
-            result.iters_done = iter;
+            result.iters_done = iter; 
+            result.iters_valid = iter;
         end
         if diff <= epsilon
             result.exit_condition = 'The tolerance epsilon was reached';
             result.iters_done = iter;
+            result.iters_valid = iter-1;
         end
+        
+        % Update the counter at the end! 
+        iter = iter + 1;
         
     end
     
