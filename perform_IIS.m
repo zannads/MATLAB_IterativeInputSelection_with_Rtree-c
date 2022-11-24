@@ -1,34 +1,28 @@
 function result = perform_IIS(data,iispar,Vflag,verbose)
 
-% This function is a wrapper around iterative_input_selection.m,   
-% the function implementing the IIS technique using Extra-Trees.                                                         
-%                                                                                                                                             
-%                                                                         
-% data              = dataset;                                            
-%                                                                         
-% rtensparam        = extra-trees parameters;                             
-%                                                                         
-% ns                = number of folds for cross validation;               
-%                                                                         
-% p                 = number of SISO models evaluated at each iteration   
-%                    (this number must be smaller than the number of      
-%                     candidate inputs);                                  
-%                                                                         
-% epsilon           = tolerance;                                          
-%                                                                         
-% max_iter          = maximum number of iterations;   
-%
-% verbose           = 0 for silent run. 1 for verbose mode 
-%
-% Vflag     = selection of the type of validation, 
-%               1 = k-fold(default)
-%               2= repeated random sub-sampling
-%
-% Outputs
-% result   = structure containing the result for each iteration
-% LOG      = the original algorithm printout saved to text
-
-
+    % This function is a wrapper around iterative_input_selection.m,
+    % the function implementing the IIS technique using Extra-Trees.
+    %
+    %
+    % data              = dataset;
+    % iispar   = struct containing the following parameters:
+    %   M        = number of trees in the ensemble
+    %   nmin     = minimum number of points per leaf
+    %   ns       = number of folds in the k-fold cross-validation process
+    %   p        = number of SISO models (it must be smaller than the number of
+    %              candidate inputs).
+    %   k        = number of random cuts, if empty set to the number of
+    %              candidate variables.
+    %   epsilon  = tolerance
+    %   max_iter = maximum number of iterations
+    % Vflag     = selection of the type of validation:
+    %               1 = k-fold(default)
+    %               2= repeated random sub-sampling
+    % verbose           = 0 for silent run. 1 for verbose mode
+    %
+    % Outputs
+    % result   = structure containing the result for each iteration
+    
 
 % 0) check if p <= number of attributes
 natt = size(data,2)-1;

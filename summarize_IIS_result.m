@@ -63,10 +63,9 @@ function [X, R2, R2_res] = summarize_IIS_result( iis_res, Nvar )
     for i = 1:Nrun
       
         for j = 1: iis_res(i).iters_valid 
-            iterS = ['iter_', int2str(j)];
-            X(j,i)      = iis_res(i).(iterS).best_SISO(1);
-            R2(j,i)     = iis_res(i).(iterS).MISO.cross_validation.performance.Rt2_val_pred_mean;
-            R2_res(j,i) = iis_res(i).(iterS).best_SISO(2);
+            X(j,i)      = iis_res(i).iter(j).best_SISO(1);
+            R2(j,i)     = iis_res(i).iter(j).MISO.cross_validation.performance.Rt2_val_pred_mean;
+            R2_res(j,i) = iis_res(i).iter(j).best_SISO(2);
         end
     end
     
