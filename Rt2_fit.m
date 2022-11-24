@@ -1,4 +1,4 @@
-function    R = Rt2_fit(yo,ys)
+function R = Rt2_fit(yo,ys)
 
 % This function calculates the value of the coefficient of determinarion R2
 %
@@ -9,11 +9,7 @@ function    R = Rt2_fit(yo,ys)
 % Output
 % R = coefficient of determination
 
+narginchk(2,2);
+nargoutchk(1,1);
 
-if(nargin ~= 2)
-  disp(  'error: wrong number of inputs'  )
-  return;
-end;
-
-
-R = 1-[(cov(yo-ys)/cov(yo))];
+R = 1-(cov(yo-ys)/cov(yo));

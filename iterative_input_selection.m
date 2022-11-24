@@ -10,6 +10,8 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
     %   ns       = number of folds in the k-fold cross-validation process
     %   p        = number of SISO models (it must be smaller than the number of
     %              candidate inputs).
+    %   k        = number of random cuts, if empty set to the number of
+    %              candidate variables.
     %   epsilon  = tolerance
     %   max_iter = maximum number of iterations
     % Vflag     = selection of the type of validation:
@@ -52,7 +54,7 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
     %     If not, see <http://www.gnu.org/licenses/>.
     %
     
-    % 0) SET THE PARAMETERS
+    %% 0) SET THE PARAMETERS
     M       = iispar.M;
     nmin    = iispar.nmin;
     if isempty( iispar.k )
@@ -72,7 +74,7 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
     %them, on the other hand the order is fixed, so 3rd element is alwasy Vflag
     %           'variable', 'default', 'check function'
     addOptional(iP,'Vflag',  1,     @(x) isnumeric(x) && isscalar(x) ); 
-    addOptional(iP,'fxV',   [],     @(x) isnumeric(x) && isvector(x) && length(x)<= max_iter );
+    addOptional(iP,'fxV',   [],     @(x) isempty(x) || isnumeric(x) && isvector(x) && length(x)<= max_iter );
     
     % this is a couple Name Value for the function, use if during the procedure
     % you are intereseted in seeing the name of the variable rather than the
@@ -107,7 +109,7 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
     miso_input = [];  % initialize an empty set to store the input variables to be selected%
     
     
-    % 1) IIS ALGORITHM
+    %% 1) IIS ALGORITHM
     while (diff > epsilon) && (iterC <= max_iter)
         
         % Visualize the iteration
@@ -130,7 +132,7 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
             ranking = [X,I];
             result.iter(iterC).ranking = ranking;
             fprintf('Evaluating SISO model:\n\t%s\n', listNames(features));
-            %evaluate the siso model, for consistency
+            %evaluate the siso model, for consistency; k = 1 (SISO)
             if f == 1
                 [siso_model] = crossvalidation_extra_tree_ensemble([input(:,features) rank_output],M,1,nmin,ns,0);
             else
@@ -148,12 +150,11 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
             % Define the ranking matrix
             matrix_ranking = [input rank_output];
             
-            % Run the feature ranking
-            k = size( input,2 );
+            % Run the feature ranking; k = number of cand var 
             [ranking] = input_ranking(matrix_ranking,M,k,nmin);
             result.iter(iterC).ranking = ranking;
             
-            % Select and cross-validate p SISO models (the first p-ranked models)
+            % Select and cross-validate p SISO models (the first p-ranked models); k = 1 (SISO)
             features = ranking(1:p,2);                             % p features to be considered
             performance = zeros(p,1);	                           % initialize a vector for the performance of the p SISO models%
             fprintf('Evaluating SISO models:\n');
@@ -191,16 +192,15 @@ function [result] = iterative_input_selection(subset,iispar,Vflag,fxV,varargin)
             return
         end
         
-        % Build a MISO model with the selected inputs
+        % Build a MISO model with the selected inputs; k = iterC (MISO, the number of variables in the matrix is equal to the number of iterations done)
         % Save old for performance comparison
         miso_model_old = miso_model;
         fprintf('Evaluating MISO model:\n');
         miso_input = [miso_input best_siso_input]; %#ok<AGROW>
-        k = length(miso_input);
         if f==1
-            [miso_model] = crossvalidation_extra_tree_ensemble([input(:,miso_input) miso_output],M,k,nmin,ns,1);
+            [miso_model] = crossvalidation_extra_tree_ensemble([input(:,miso_input) miso_output],M,iterC,nmin,ns,1);
         else
-            [miso_model] = repeatedRandomSubSamplingValidation_extra_tree_ensemble([input(:,miso_input) miso_output],M,k,nmin,ns,1);
+            [miso_model] = repeatedRandomSubSamplingValidation_extra_tree_ensemble([input(:,miso_input) miso_output],M,iterC,nmin,ns,1);
         end
         result.iter(iterC).MISO = miso_model;
         fprintf('\t%4.2f\n\n', miso_model.cross_validation.performance.Rt2_val_pred_mean);

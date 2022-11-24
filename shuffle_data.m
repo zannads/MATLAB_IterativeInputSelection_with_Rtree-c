@@ -1,14 +1,13 @@
 function [subset_out,idx] = shuffle_data(subset_in)
 
-% This function builds an ensemble of Exra-Trees and then ranks 
-% the input variables according to their importance
+% This function reorders in a random sequence the rows of the input matrix.
 %
 % Input: 
-% subset = observations
+% subset        = observations
 %
 % Output: 
-% subset_out = shuffled observations
-% idx = indexes used in the permutation
+% subset_out    = shuffled observations
+% idx           = indexes used in the permutation
 
 
 % create a random permutation
@@ -17,7 +16,7 @@ idx   = randperm(N);
 idx   = idx';
 
 % initialize the output vector
-subset_out = nan(size(subset_in));
+subset_out = nan(N,M);
 
 % shuffle
 for j = 1:N
@@ -26,5 +25,3 @@ end
 
 
 % This code has been written by Stefano Galelli.
-
-

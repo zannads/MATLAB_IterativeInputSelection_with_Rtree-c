@@ -23,21 +23,16 @@ rtensparam.rtparam.nmin        = nmin;
 % Build and ensemble of Extra Trees and get the score of each variable (for
 % each tree)
   
-X1  = single(subset(:,1:end-1));
+X1  = single(subset(:,1:end-1)); %#ok<*NASGU>
 Y1  = single(subset(:,end));
 ls1 = int32(1:size(subset,1));
 evalc('[ensemble contr] = rtenslearn_c(X1,Y1,ls1,[],rtensparam,0)');
 
 % normalization
-contr = contr./sum(contr)*100;
+contr = contr./sum(contr)*100; %#ok<NODEF>
 
 % Rank the variable in decreasing order
 [X,I] = sort(contr,1,'descend');
 result = [X,I];
 
 % This code has been written by Stefano Galelli and Riccardo Taormina
-
-
-
-
-

@@ -19,7 +19,7 @@ function [model] = crossvalidation_extra_tree_ensemble(subset,M,k,nmin,ns,flag)
 % 0) SET THE PROBLEM PARAMETERS FOR THE ENSEMBLE CROSS-VALIDATION
 
 % Number of lines characterizing an alternative (a single fold)
-l = floor(length(subset)/ns);
+l = floor(size(subset,1)/ns);
 
 % Re-define the subset matrix
 subset = subset(1:l*ns,:);
@@ -55,7 +55,8 @@ for i = 1:ns
     % Calibration
     if (i > 1) && (i < ns)
         subset_tar = [subset(i*l+1:end,:) ; subset(1:(i-1)*l,:)];
-    else if i == 1
+    else
+        if i == 1
             subset_tar = subset(i*l+1:end,:);
         else
             subset_tar = subset(1:(i-1)*l,:);
@@ -65,15 +66,15 @@ for i = 1:ns
     subset_val = subset((i-1)*l+1:i*l,:);
     
     % datasets
-    X1  = single(subset_tar(:,1:end-1));
+    X1  = single(subset_tar(:,1:end-1)); %#ok<*NASGU>
     Y1  = single(subset_tar(:,end));
     ls1 = int32(1:size(subset_tar,1));    
     X2  = single(subset_val(:,1:end-1));    
         
     % Ensemble building + test the ensemble on the calibration and validation dataset
     evalc('[finalResult_val_pred temp1 temp2 finalResult_cal_pred] = rtenslearn_c(X1,Y1,ls1,[],rtensparam,X2,0)');
-    Rt2_cal_pred(i)      = Rt2_fit(subset_tar(:,end),finalResult_cal_pred);                
-    Rt2_val_pred(i)        = Rt2_fit(subset_val(:,end),finalResult_val_pred);
+    Rt2_cal_pred(i)     = Rt2_fit(subset_tar(:,end),finalResult_cal_pred);                
+    Rt2_val_pred(i)     = Rt2_fit(subset_val(:,end),finalResult_val_pred);
 
 end
 
@@ -108,21 +109,7 @@ if flag == 1
     % Evaluate R2              
     model.complete_model.performance.Rt2   = Rt2_fit(subset(:,end),finalResult_pred);
 
-else
-    
-    return
-    
 end
-
 
 % This code has been written by Stefano Galelli and Riccardo Taormina.
  
-
-
-
-
-
-
-
-
-
